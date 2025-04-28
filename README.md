@@ -59,7 +59,7 @@ python dashboard.py
 ```
 
 ## 🧠 Goals of Ascent
-- Learn foundational AI architecture concepts by building hands-on (with the help of AI tools).
+- Learn foundational AI architecture concepts by building hands-on (and with the help of AI tools).
 - Create a meaningful companion that improves over time.
 - Serve as a flexible skeleton for future projects (trading bots, medical advisors, etc.)
 
