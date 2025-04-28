@@ -1,0 +1,20 @@
+Template for Future Progress Reports:
+
+Progress Report - YYYY-MM-DD
+
+Summary:
+[Quick 2-3 sentence overview]
+
+What We Accomplished:
+- [List bullet points]
+
+Challenges We Faced:
+- [List bullet points]
+
+Overall Reflection:
+[A paragraph on how the model feels after the changes]
+
+Next Steps:
+- [List next actions or goals]
+
+🌱

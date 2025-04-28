@@ -1,0 +1,35 @@
+
+
+
+Progress Report - 2025-04-27 to 2025-04-28
+
+Summary:
+Today was a MAJOR milestone in the Ascent project.
+
+What We Accomplished:
+- Added a massive amount of new conversations to expand Ascent’s dataset.
+- Implemented major upgrades to the model architecture, including multi-head attention and better vocab handling.
+- Improved training output formatting: added a progress bar, estimated training time, and cleaner epoch updates.
+- Reorganized the control center (hyperparameters and toggles) for easier adjustments without touching the core code.
+- Handled invalid probability fallbacks more gracefully with a friendly counter instead of messy spam.
+- Built a fully working dashboard that now displays saved PNG graphs of loss and perplexity curves (HUGE quality-of-life upgrade).
+- Organized metadata saving and created a new folder structure for training logs and progress reports.
+
+Challenges We Faced:
+- Model outputs sometimes still had early sentence cutoffs ("cheating" to end fast).
+- Needed multiple retries to fix the dashboard graph displays and data sorting.
+- Training now pushes the computer pretty hard (watching temps is important).
+- Still need deeper improvements to sampling quality (refining p-sampling and fallback handling further).
+
+Overall Reflection:
+The language structure Ascent is producing is getting better and better. The sense of flow, metaphor, and grounding is visible now even with occasional weirdness. We're at a tipping point where future improvements will be about QUALITY of data and sampling, not just size of the dataset.
+
+Next Steps:
+- Further polish the sampling and fallback behavior.
+- Grow the dataset carefully to emphasize *meaningful* sentence structure.
+- Lightly explore model expansion (future: hidden size? more transformer layers?).
+- Keep documenting each phase of growth in the new progress_reports folder!
+
+🌱 Ascent is slowly but surely becoming something truly beautiful.
+
+---
