@@ -279,6 +279,7 @@ if __name__ == "__main__":
                     optim.step()
                     epoch_losses.append(loss.item())
                 avg_loss = sum(epoch_losses) / len(epoch_losses)
+                losses.append(avg_loss)  # Store loss for each epoch to generate full loss curve
                 perplexity = math.exp(avg_loss)
                 perplexities.append(perplexity)
                 # Write loss and perplexity to live log files
@@ -328,7 +329,7 @@ if __name__ == "__main__":
             # Save training loss and perplexity plots
             loss_curve_path = os.path.join(run_dir, "loss_curve.png")
             plt.figure()
-            plt.plot([sum(epoch_losses) / len(epoch_losses) if len(epoch_losses) > 0 else 0 for epoch_losses in [epoch_losses]], label="Avg Loss")
+            plt.plot(losses, label="Avg Loss")
             plt.title(f"Training Loss Curve - {run_name}")
             plt.xlabel("Epochs")
             plt.ylabel("Loss")
@@ -346,7 +347,7 @@ if __name__ == "__main__":
             loss_data_path = os.path.join(run_dir, "loss_curve.txt")
             perplexity_data_path = os.path.join(run_dir, "perplexity_curve.txt")
             with open(loss_data_path, "w") as f:
-                f.write("\n".join(map(str, [sum(epoch_losses) / len(epoch_losses) if len(epoch_losses) > 0 else 0 for epoch_losses in [epoch_losses]])))
+                f.write("\n".join(map(str, losses)))
             with open(perplexity_data_path, "w") as f:
                 f.write("\n".join(map(str, perplexities)))
             print(f"Saved loss and perplexity data to '{loss_data_path}' and '{perplexity_data_path}'")
