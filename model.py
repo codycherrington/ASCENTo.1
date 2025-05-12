@@ -1,11 +1,12 @@
-import torch
+import datetime
 import math
 import os
-import datetime
 import time
+
 import matplotlib.pyplot as plt
-from torch.nn.utils.rnn import pad_sequence
+import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pad_sequence
 from torch.optim.lr_scheduler import LambdaLR
 
 # ----------------------------
@@ -30,6 +31,7 @@ top_k_sampling_limit = 30     # Maximum number of top-k tokens to sample from
 # Data Loading and Preparation
 # ----------------------------
 import json
+
 with open("ascent_data/conversations.json", "r") as f:
     conversations = json.load(f)
 
@@ -326,23 +328,6 @@ if __name__ == "__main__":
                 model.load_state_dict(best_model_state)
                 print(f"Restored best model from epoch {best_epoch + 1} with avg_loss={best_loss:.4f}.")
 
-            # Save training loss and perplexity plots
-            loss_curve_path = os.path.join(run_dir, "loss_curve.png")
-            plt.figure()
-            plt.plot(losses, label="Avg Loss")
-            plt.title(f"Training Loss Curve - {run_name}")
-            plt.xlabel("Epochs")
-            plt.ylabel("Loss")
-            plt.legend()
-            plt.savefig(loss_curve_path)
-            perplexity_curve_path = os.path.join(run_dir, "perplexity_curve.png")
-            plt.figure()
-            plt.plot(perplexities, label="Perplexity", color='orange')
-            plt.title(f"Training Perplexity Curve - {run_name}")
-            plt.xlabel("Epochs")
-            plt.ylabel("Perplexity")
-            plt.legend()
-            plt.savefig(perplexity_curve_path)
             # Save raw loss and perplexity values
             loss_data_path = os.path.join(run_dir, "loss_curve.txt")
             perplexity_data_path = os.path.join(run_dir, "perplexity_curve.txt")
@@ -350,6 +335,34 @@ if __name__ == "__main__":
                 f.write("\n".join(map(str, losses)))
             with open(perplexity_data_path, "w") as f:
                 f.write("\n".join(map(str, perplexities)))
+
+            # Save training loss and perplexity plots using data from file
+            loss_curve_path = os.path.join(run_dir, "loss_curve.png")
+            loss_data_path = os.path.join(run_dir, "loss_curve.txt")
+            if os.path.exists(loss_data_path):
+                with open(loss_data_path, "r") as f:
+                    losses = [float(line.strip()) for line in f if line.strip()]
+            plt.figure()
+            plt.plot(losses, label="Avg Loss")
+            plt.title(f"Training Loss Curve - {run_name}")
+            plt.xlabel("Epochs")
+            plt.ylabel("Loss")
+            plt.legend()
+            plt.savefig(loss_curve_path)
+
+            perplexity_curve_path = os.path.join(run_dir, "perplexity_curve.png")
+            perplexity_data_path = os.path.join(run_dir, "perplexity_curve.txt")
+            if os.path.exists(perplexity_data_path):
+                with open(perplexity_data_path, "r") as f:
+                    perplexities = [float(line.strip()) for line in f if line.strip()]
+            plt.figure()
+            plt.plot(perplexities, label="Perplexity", color='orange')
+            plt.title(f"Training Perplexity Curve - {run_name}")
+            plt.xlabel("Epochs")
+            plt.ylabel("Perplexity")
+            plt.legend()
+            plt.savefig(perplexity_curve_path)
+
             print(f"Saved loss and perplexity data to '{loss_data_path}' and '{perplexity_data_path}'")
             print(f"Saved training curves: '{loss_curve_path}' and '{perplexity_curve_path}'")
             # Save metadata about the training run
