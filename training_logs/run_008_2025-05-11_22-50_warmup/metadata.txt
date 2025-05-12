@@ -1,0 +1,13 @@
+Run: 8
+Timestamp: 2025-05-11_22-50
+Embedding Dim: 128
+Hidden Dim: 256
+Num Transformer Blocks: 6
+Batch Size: 16
+Learning Rate: 0.0008
+Temperature: 0.6
+Max Generation Tokens: 40
+Best Avg Loss: 1.2011
+Final Perplexity: 3.33
+Training Duration (min): 11.69
+Final Epoch: 500

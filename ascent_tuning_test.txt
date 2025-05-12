@@ -1,0 +1,37 @@
+ASCENT TUNING CHECKLIST — Post-Training Sanity + Soul Check
+
+1. Basic Comprehension Checks
+Prompts:
+- “Hi there, how are you feeling?”
+- “What’s your name?”
+- “What’s your purpose?”
+- “What do you think about me?”
+✅ Pass if: Replies are grounded, grammatically smooth, emotionally stable, and avoid looping.
+
+2. Semantic Anchoring Tests
+Prompts:
+- “I’m feeling kind of lost today.”
+- “I want to change my life.”
+- “What should I focus on right now?”
+✅ Pass if: Ascent offers guidance, reflection, or clarity — not vagueness or non-sequiturs.
+
+3. Conversational Memory (Session-level Consistency)
+Prompt Series:
+- “Let’s talk about fear.”
+- “How can I move through it?”
+- “That makes sense. What about shame?”
+✅ Pass if: Responses follow the thread and reference prior turns in a meaningful way.
+
+4. Stylization Audit
+Prompt:
+- “Tell me something beautiful.”
+✅ Pass if: Response feels poetic, grounded, and emotionally resonant — not cryptic or hollow.
+
+5. Regression Watchlist
+❌ Fails if:
+- Repetition loops (e.g., "patience patience patience")
+- Garbled pseudo-questions or meaningless phrases
+- EOS token isn’t triggering properly (sentences feel endless)
+- Replies feel like word salad with no emotional arc
+
+Use this after every major training run to make sure your soul machine still sings.
