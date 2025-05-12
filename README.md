@@ -1,89 +1,111 @@
-# Ascent 1.0 🚀
+# ASCENTo.1 🚀  
+*A personal, terminal-based LLM built from scratch for AI exploration, creative experimentation, and intentional growth.*
 
-Welcome to **Ascent** — a personal, lightweight LLM project designed for language experimentation, personal growth, and building an understanding of AI systems from the ground up.
+---
 
-## 🌟 Project Highlights
-- **Custom Model:** Built and trained from scratch using PyTorch.
-- **Transformer Architecture:** Simple yet powerful self-attention mechanism.
-- **Training Dashboard:** Live tracking of loss, perplexity, and progress bars.
-- **Conversation Mode:** Chat with your model right inside the terminal.
-- **Dataset Expansion:** Easily grow the model's conversational abilities.
-- **Training Logs:** Save loss curves, perplexity curves, and run metadata for every session.
+## 🌟 Highlights
 
-## 🚀 Features
-- Vocabulary dynamically grows with the dataset.
-- Save and reload best-performing models automatically.
-- Easy "Control Center" settings to tweak model size, training epochs, batch size, etc.
-- Loading bar with estimated time remaining during training.
-- Fall-back counter to monitor token generation stability.
+- **Custom Language Model** – Trained from scratch with PyTorch using your own dataset.
+- **Transformer Architecture** – Simple, interpretable, and modifiable.
+- **Terminal Chat Interface** – Interact with the model directly through your console.
+- **Live Training Dashboard** – See loss, perplexity, and progress updates in real time.
+- **Session Logging** – Automatically saves loss/perplexity curves and run metadata.
+- **Flexible Control Center** – Adjust model dimensions, learning rates, batch sizes, and more.
 
-## 🛠️ Technologies Used
+---
+
+## 🧠 Purpose
+
+ASCENTo.1 was created as a personal learning tool and AI sandbox. It's built to:
+
+- Teach foundational AI architecture hands-on (without relying on black-box APIs).
+- Serve as a minimalist LLM you can evolve over time.
+- Act as a core framework for future projects, including:
+  - Personal growth companions  
+  - Creative writing or journaling assistants  
+  - AI advisors or bots (financial, mental health, etc.)
+
+---
+
+## 🛠️ Tech Stack
+
 - Python 3
 - PyTorch
-- Pandas
 - Matplotlib
 
-## 📂 Project Structure
-```
-Ascent/
-├── conversations.py         # Custom conversation data
-├── dashboard.py              # Dashboard to monitor training runs
-├── model.py                  # Main model file (training, chat, save, etc.)
-├── vocab.py                  # Vocabulary building and management
-├── progress_reports/         # Progress journals and templates
-├── training_logs/            # Saved training session outputs
-├── LICENSE                   # MIT License
-└── README.md                 # Project overview
+---
+
+## ⚙️ Quickstart
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/codycherrington/ASCENTo.1.git
+cd ASCENTo.1
 ```
 
-## ⚙️ Quick Start
+### 2. Install dependencies
 
-Clone the repo:
-```
-git clone https://github.com/codycherrington/Ascent-1.0.git
-```
-
-Install required packages:
-```
-pip install torch pandas matplotlib
+```bash
+pip install torch matplotlib
 ```
 
-Run the project:
-```
+### 3. Launch the model
+
+```bash
 python model.py
 ```
 
-Optional: Launch the dashboard separately:
+Train from scratch, start a conversation, or expand the dataset.
+
+---
+
+## 📂 Project Structure
+
 ```
-python dashboard.py
+ASCENTo.1/
+├── ascent_data/               # Preprocessed conversations + vocab
+├── Archive/                   # Old scripts (vocab builder, etc.)
+├── model.py                   # Core model: train, chat, save, etc.
+├── dashboard.py               # (Optional) Graphical loss + performance tracking
+├── training_logs/             # Logs per training run
+├── ascent_tuning_test.txt     # Dev/test samples for quick tuning
+├── LICENSE                    # License text
+└── README.md                  # This file
 ```
 
-## 🧠 Goals of Ascent
-- Learn foundational AI architecture concepts by building hands-on (and with the help of AI tools).
-- Create a meaningful companion that improves over time.
-- Serve as a flexible skeleton for future projects (trading bots, medical advisors, etc.)
+---
+
+## 💡 Key Features
+
+- 🧠 **EOS-Aware Chat** – Encourages clean sentence endings.
+- ♻️ **Repetition Dampening** – Reduces token spam and monotony.
+- 🎯 **Top-p + Top-k Sampling** – Flexible, human-like response shaping.
+- 📉 **Live Curve Saving** – Loss + perplexity graphs saved after every session.
+- 🛠️ **Commented Source** – Everything is fully open and documented.
+
+---
 
 ## 📝 License
-This project is licensed under the [MIT License](LICENSE).
 
-MIT License
+### MIT License
 
 Copyright (c) 2025 Cody Cherrington
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
+Permission is hereby granted, free of charge, to any person obtaining a copy  
+of this software and associated documentation files (the "Software"), to deal  
+in the Software without restriction, including without limitation the rights  
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell  
+copies of the Software, and to permit persons to whom the Software is  
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in  
+all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+**THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR  
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,  
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE  
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER  
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,  
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE  
+SOFTWARE.**
