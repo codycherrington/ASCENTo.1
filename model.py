@@ -21,7 +21,7 @@ temperature = 0.6            # Sampling temperature for generation
 max_generation_tokens = 50   # Maximum number of tokens generated in chat
 early_stopping_patience = 100    # Early stopping patience
 early_stopping_min_delta = 0.0003 # Minimum improvement for early stopping
-top_p_sampling_threshold = 0.9     # Top-p (nucleus) sampling threshold
+top_p_sampling_threshold = 0.95     # Top-p (nucleus) sampling threshold
 total_epochs = 500            # Total number of training epochs
 top_k_sampling_limit = 30     # Maximum number of top-k tokens to sample from
 
@@ -394,7 +394,7 @@ if __name__ == "__main__":
                 inp = torch.tensor(toks, dtype=torch.long).unsqueeze(0)
                 generated_ids = []
                 max_gen = max_generation_tokens
-                min_gen_tokens = 8  # Allow eos token after 8 tokens
+                min_gen_tokens = 12  # Prevent early truncation of responses
                 seq_len = inp.size(1)
                 chat_tensor = torch.zeros(1, seq_len + max_gen, dtype=torch.long)
                 chat_tensor[0, :seq_len] = inp
@@ -404,9 +404,13 @@ if __name__ == "__main__":
                 with torch.no_grad():
                     for step in range(max_gen):
                         # Gradually increase temperature for later tokens
-                        temp_step = min(temperature + (step * 0.01), 1.0)
+                        temp_step = min(temperature + (step * 0.015), 1.0)  # Slightly more diversity
                         logits = model(chat_tensor[:, :curr_len])
                         last_logits = logits[0, -1, :]
+                        # Prevent repetitive overuse of "Ascent" token — will remove this later, bandaid fix
+                        ascent_id = vocab.get("ascent", None)
+                        if ascent_id is not None:
+                            last_logits[ascent_id] *= 0.5
                         # Apply repetition penalty to previously used tokens
                         if generated_ids:
                             for token_id in set(generated_ids):
@@ -417,7 +421,7 @@ if __name__ == "__main__":
                             probs[eos_index] = 0
                             probs = probs / probs.sum()
                         elif step > 15:
-                            probs[eos_index] *= 1.4  # Make EOS more likely after step 15
+                            probs[eos_index] *= 1.15  # Make EOS more likely after step 15
                         p = top_p_sampling_threshold
                         sorted_probs, sorted_indices = torch.sort(probs, descending=True)
                         cumulative_probs = torch.cumsum(sorted_probs, dim=0)
