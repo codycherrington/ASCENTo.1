@@ -64,15 +64,12 @@ def plot_graphs(run_info):
     plt.tight_layout()
     return fig
 
-def on_row_select(event):
-    # Update plots and notes when a row is selected
-    selected_item = tree.selection()
-    if not selected_item:
+def on_run_select(event):
+    selection = run_listbox.curselection()
+    if not selection:
         return
-    item = tree.item(selected_item)
-    values = item["values"]
-    timestamp = values[1]  # Timestamp column
-    run_info = df_sorted[df_sorted["Timestamp"] == timestamp].iloc[0]
+    idx = selection[0]
+    run_info = df_sorted.iloc[idx]
 
     for widget in frame_plot.winfo_children():
         widget.destroy()
@@ -85,11 +82,43 @@ def on_row_select(event):
     canvas_widget.pack(padx=10, pady=10)
     canvas.draw()
 
-    run_folder = os.path.join(LOG_DIR, run_info["Folder Name"])
+    # Metadata table
+    metadata_label = tk.Label(frame_plot, text="📊 Training Run Metadata", font=("Helvetica", 12, "bold"))
+    metadata_label.pack(padx=10, pady=(10, 0))
 
+    canvas_wrapper = tk.Frame(frame_plot)
+    canvas_wrapper.pack(padx=10, pady=(0, 10), fill=tk.BOTH, expand=False)
+
+    canvas = tk.Canvas(canvas_wrapper, height=180)
+    scrollbar = tk.Scrollbar(canvas_wrapper, orient="vertical", command=canvas.yview)
+    scroll_frame = tk.Frame(canvas)
+
+    scroll_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(
+            scrollregion=canvas.bbox("all")
+        )
+    )
+
+    canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    for key, value in run_info.items():
+        if key == "Folder Name":
+            continue
+        if key == "Timestamp":
+            value = value.replace("_", ":")
+        row = tk.Frame(scroll_frame)
+        row.pack(fill=tk.X, pady=1)
+        tk.Label(row, text=f"{key}:", width=25, anchor='w', font=("Helvetica", 10, "bold")).pack(side=tk.LEFT)
+        tk.Label(row, text=value, anchor='w', font=("Helvetica", 10)).pack(side=tk.LEFT)
+
+    run_folder = os.path.join(LOG_DIR, run_info["Folder Name"])
     notes_label = tk.Label(frame_plot, text="📝 Notes", font=("Helvetica", 12, "bold"))
     notes_label.pack(padx=10, pady=(20,5))
-
     notes_path = os.path.join(run_folder, "notes.txt")
     notes_text = scrolledtext.ScrolledText(frame_plot, height=5, wrap=tk.WORD)
     notes_text.pack(padx=10, pady=(0,10))
@@ -106,15 +135,14 @@ def on_row_select(event):
 
     save_button = tk.Button(frame_plot, text="💾 Save Notes", command=save_notes)
     save_button.pack(padx=10, pady=(0,10))
-
     notes_text.bind("<FocusOut>", lambda e: save_notes())
 
 def refresh_dashboard():
-    # Load metadata and update the dashboard table and plot area
+    # Load metadata and update the dashboard UI with sidebar list and details pane
     for widget in frame_content.winfo_children():
         widget.destroy()
 
-    global df_sorted, tree, frame_table, frame_plot
+    global df_sorted, run_listbox, frame_plot
     df = load_metadata()
     if df.empty:
         empty_label = tk.Label(frame_content, text="🚀 No training runs yet. Let's build something incredible!", font=("Helvetica", 14))
@@ -133,45 +161,27 @@ def refresh_dashboard():
         df["Timestamp"] = df["Timestamp"].apply(format_ts)
 
     df_sorted = df.sort_values(by="Timestamp", ascending=False)
-    columns_to_display = [
-        "Run", "Timestamp", "Best Avg Loss", "Final Perplexity",
-        "Embedding Dim", "Hidden Dim", "Num Transformer Blocks",
-        "Batch Size", "Learning Rate", "Training Duration (min)"
-    ]
-    df_show = df_sorted[columns_to_display]
-    df_show.reset_index(drop=True, inplace=True)
 
-    frame_table = tk.Frame(frame_content)
-    frame_table.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+    # Sidebar frame for run list
+    frame_sidebar = tk.Frame(frame_content, width=250)
+    frame_sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
 
-    tree = ttk.Treeview(frame_table, columns=columns_to_display, show="headings", height=8)
-    for col in columns_to_display:
-        tree.heading(col, text=col)
-        tree.column(col, width=100, anchor=tk.CENTER)
-    for idx, row in df_show.iterrows():
-        tree.insert("", tk.END, values=list(row))
+    scrollbar = tk.Scrollbar(frame_sidebar)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-    try:
-        best_loss = pd.to_numeric(df_show["Best Avg Loss"], errors='coerce').min()
-        if pd.notna(best_loss):
-            for item in tree.get_children():
-                vals = tree.item(item)["values"]
-                try:
-                    loss_val = float(vals[2])
-                    if loss_val == best_loss:
-                        tree.item(item, tags=("best",))
-                except Exception:
-                    continue
-            tree.tag_configure("best", background="lightgreen")
-    except Exception:
-        pass
+    run_listbox = tk.Listbox(frame_sidebar, yscrollcommand=scrollbar.set, width=40, font=("Helvetica", 10))
+    scrollbar.config(command=run_listbox.yview)
+    run_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-    tree.pack()
+    run_entries = [f"Run #{row['Run']} — {row['Timestamp']}" for _, row in df_sorted.iterrows()]
+    for entry in run_entries:
+        run_listbox.insert(tk.END, entry)
 
-    tree.bind("<<TreeviewSelect>>", on_row_select)
-
+    # Right pane for details and plots
     frame_plot = tk.Frame(frame_content)
     frame_plot.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    run_listbox.bind("<<ListboxSelect>>", on_run_select)
 
 def create_new_note():
     # Create a global note window to add new notes

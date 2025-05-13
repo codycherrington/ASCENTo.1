@@ -1,29 +1,31 @@
-import datetime
-import math
 import os
+import math
 import time
+import json
+import datetime
+import random
 
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import pad_sequence
+import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import LambdaLR
+from torch.nn.utils.rnn import pad_sequence
 
 # ----------------------------
 # Main Configuration Section
 # ----------------------------
 # Set model and training hyperparameters
-embedding_dim = 256          # Size of each token's embedding vector
-hidden_dim = 512             # Hidden size for the feed-forward layers
-num_transformer_blocks = 8   # Number of transformer layers
+embedding_dim = 320          # Size of each token's embedding vector
+hidden_dim = 640             # Hidden size for the feed-forward layers
+num_transformer_blocks = 6   # Number of transformer layers
 batch_size = 16              # Batch size for training
 learning_rate = 0.0008       # Initial learning rate
 temperature = 0.6            # Sampling temperature for generation
 max_generation_tokens = 50   # Maximum number of tokens generated in chat
-early_stopping_patience = 100    # Early stopping patience
+early_stopping_patience = 20    # Early stopping patience
 early_stopping_min_delta = 0.0003 # Minimum improvement for early stopping
 top_p_sampling_threshold = 0.95     # Top-p (nucleus) sampling threshold
-total_epochs = 500            # Total number of training epochs
+total_epochs = 200            # Total number of training epochs
 top_k_sampling_limit = 30     # Maximum number of top-k tokens to sample from
 
 
@@ -60,16 +62,17 @@ class TokenEmbedding(nn.Module):
     def __init__(self, vocab_size, embedding_dim):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, x):
         # The input tensor 'x' contains token indices of shape [batch_size, sequence_length]
         # Returns embedded vectors of shape [batch_size, sequence_length, embedding_dim]
-        return self.embedding(x)
+        return self.dropout(self.embedding(x))
 
 
 # PositionalEncoding: Adds information about token positions to embeddings
 class PositionalEncoding(nn.Module):
-    def __init__(self, embedding_dim, max_len=5000):
+    def __init__(self, embedding_dim, max_len=8000):
         super().__init__()
         # Precompute positional encodings as a fixed buffer
         pe = torch.zeros(max_len, embedding_dim)
@@ -82,7 +85,7 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x):
         # Adds positional encodings to the input embeddings
-        return x + self.pe[:, :x.size(1)]
+        return x + 0.95 * self.pe[:, :x.size(1)]
 
 
 # MultiHeadSelfAttention: Allows the model to attend to different parts of the sequence
@@ -96,7 +99,17 @@ class MultiHeadSelfAttention(nn.Module):
         self.key = nn.Linear(embedding_dim, embedding_dim)
         self.value = nn.Linear(embedding_dim, embedding_dim)
         self.out = nn.Linear(embedding_dim, embedding_dim)
-        self.scale = math.sqrt(self.head_dim)
+        self.scale = 1.0 / math.sqrt(self.head_dim)
+        self.register_buffer("_cached_causal_mask", None, persistent=False)
+
+    def _get_causal_mask(self, seq_len, device):
+        # Cache the mask if possible
+        mask = self._cached_causal_mask
+        if mask is not None and mask.size(-1) >= seq_len:
+            return mask[..., :seq_len, :seq_len]
+        mask = torch.tril(torch.ones(seq_len, seq_len, device=device)).unsqueeze(0).unsqueeze(0)
+        self._cached_causal_mask = mask
+        return mask
 
     def forward(self, x):
         # The input tensor 'x' has shape [batch_size, sequence_length, embedding_dim]
@@ -110,7 +123,10 @@ class MultiHeadSelfAttention(nn.Module):
         K = K.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
         V = V.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
         # Compute scaled dot-product attention
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / self.scale
+        scores = torch.matmul(Q, K.transpose(-2, -1)) * self.scale
+        # Apply causal mask to prevent attention to future tokens
+        mask = self._get_causal_mask(seq_len, x.device)
+        scores = scores.masked_fill(mask == 0, float('-inf'))
         weights = torch.softmax(scores, dim=-1)
         output = torch.matmul(weights, V)
         # Combine all heads back to [batch_size, sequence_length, embedding_dim]
@@ -123,22 +139,21 @@ class TransformerBlock(nn.Module):
     def __init__(self, embedding_dim, hidden_dim):
         super().__init__()
         self.attn  = MultiHeadSelfAttention(embedding_dim, num_heads=4)
-        self.norm1 = nn.LayerNorm(embedding_dim)
+        self.norm1 = nn.LayerNorm(embedding_dim, eps=1e-5)
         self.mlp   = nn.Sequential(
             nn.Linear(embedding_dim, hidden_dim),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Dropout(0.2),
             nn.Linear(hidden_dim, embedding_dim)
         )
-        self.norm2 = nn.LayerNorm(embedding_dim)
+        self.norm2 = nn.LayerNorm(embedding_dim, eps=1e-5)
+        self.dropout = nn.Dropout(0.1)
 
-    def forward(self, x):
-        # Apply multi-head self-attention and add residual connection, then normalize
-        a = self.attn(x)
-        x = self.norm1(x + a)
-        # Apply feed-forward network, add residual, then normalize again
-        m = self.mlp(x)
-        return self.norm2(x + m)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        attn_out = self.attn(x)
+        x = self.norm1(x + attn_out)
+        mlp_out = self.dropout(self.mlp(x))
+        return self.norm2(x + mlp_out)
 
 
 # Ascent: The main GPT-like model with embeddings, positional encoding, stacked transformers, and output layer
@@ -149,6 +164,7 @@ class Ascent(nn.Module):
         self.pos_encoder = PositionalEncoding(embedding_dim)
         # Stack multiple transformer blocks
         self.transformer = nn.Sequential(*[TransformerBlock(embedding_dim, hidden_dim) for _ in range(num_transformer_blocks)])
+        self.norm = nn.LayerNorm(embedding_dim)
         self.output      = nn.Linear(embedding_dim, vocab_size)
 
     def forward(self, x):
@@ -156,6 +172,7 @@ class Ascent(nn.Module):
         x = self.embed(x)
         x = self.pos_encoder(x)
         x = self.transformer(x)
+        x = self.norm(x)
         logits = self.output(x)
         return logits
 
@@ -167,7 +184,7 @@ class Ascent(nn.Module):
 if __name__ == "__main__":
 
     # Print model output size for reference
-    print(f"Vocab size: {vocab_size}, Output size: {Ascent(vocab_size, embedding_dim, hidden_dim).output.out_features}")
+    print(f"Vocab size / Output size: {vocab_size}")
     model = Ascent(vocab_size, embedding_dim=embedding_dim, hidden_dim=hidden_dim)
 
     # Try to load an existing model checkpoint if available
@@ -204,10 +221,20 @@ if __name__ == "__main__":
             data = []
             for p in conversations:
                 if "input" in p and "output" in p:
-                    inp = [vocab[w] for w in p["input"].split() if w in vocab]
-                    out = [vocab[w] for w in p["output"].split() if w in vocab] + [eos_index]
-                    if inp and out:
-                        data.append((torch.tensor(inp), torch.tensor(out)))
+                    inp_tokens = []
+                    for w in p["input"].split():
+                        token_id = vocab.get(w)
+                        if token_id is not None and token_id < vocab_size:
+                            inp_tokens.append(token_id)
+
+                    out_tokens = []
+                    for w in p["output"].split():
+                        token_id = vocab.get(w)
+                        if token_id is not None and token_id < vocab_size:
+                            out_tokens.append(token_id)
+                    out_tokens.append(eos_index)
+                    if inp_tokens and out_tokens:
+                        data.append((torch.tensor(inp_tokens), torch.tensor(out_tokens)))
 
             # Set up training log directories and files
             log_dir = "training_logs"
@@ -245,7 +272,8 @@ if __name__ == "__main__":
             total_tokens = sum(len(out) for _, out in data)
 
             # Helper function: pad a batch of sequences to the same length
-            def pad_batch(batch, pad_value=0):
+            PAD_VALUE = special_tokens.get("<pad>", 0) if "pad" in special_tokens or "<pad>" in special_tokens else 0
+            def pad_batch(batch: list[torch.Tensor], pad_value: int = PAD_VALUE) -> torch.Tensor:
                 return pad_sequence(batch, batch_first=True, padding_value=pad_value)
 
             best_loss = float('inf')
@@ -259,9 +287,10 @@ if __name__ == "__main__":
             import random
 
             # Main training loop over epochs
-            for epoch in range(total_epochs):
+            for epoch, _ in enumerate(range(total_epochs)):
                 epoch_start = time.perf_counter()
                 random.shuffle(data)
+
                 epoch_losses = []
                 for i in range(0, len(data), batch_size):
                     batch = data[i:i+batch_size]
@@ -278,30 +307,28 @@ if __name__ == "__main__":
                     target_flat = target.reshape(-1)
                     loss = loss_fn(logits_flat, target_flat)
                     loss.backward()
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     optim.step()
                     epoch_losses.append(loss.item())
+
                 avg_loss = sum(epoch_losses) / len(epoch_losses)
-                losses.append(avg_loss)  # Store loss for each epoch to generate full loss curve
+                losses.append(avg_loss)
                 perplexity = math.exp(avg_loss)
                 perplexities.append(perplexity)
+
                 # Write loss and perplexity to live log files
                 with open(live_loss_path, "a") as f_loss, open(live_perplexity_path, "a") as f_ppl:
                     f_loss.write(f"{avg_loss}\n")
                     f_ppl.write(f"{perplexity}\n")
-                # Print progress every 5 epochs or last epoch
-                if (epoch + 1) % 5 == 0 or epoch == (total_epochs - 1):
-                    print(f"🚀 Epoch {epoch + 1:<4} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f}")
-                    elapsed_time = (time.time() - start_time) / 60
-                    estimated_total_time = (elapsed_time / (epoch + 1)) * total_epochs
-                    print(f"🕰️ Estimated total training time: {estimated_total_time:.2f} minutes")
-                    progress = (epoch + 1) / total_epochs
-                    bar_length = 30
-                    filled_length = int(bar_length * progress)
-                    bar = "=" * filled_length + ">" + " " * (bar_length - filled_length - 1)
-                    print(f"\r[{bar}] {progress*100:.1f}% complete (Epoch {epoch + 1}/{total_epochs})", end="\n")
+
+                # Print dynamic single-line progress summary
+                print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Patience: {patience_counter}/{patience}", end="", flush=True)
+
                 epoch_duration = time.perf_counter() - epoch_start
-                print(f"⏱️ Epoch duration: {epoch_duration:.2f} sec")
+                print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Duration: {epoch_duration:.2f}s{' ' * 20}")
+
                 scheduler.step()
+
                 # Early stopping: save best model and break if no improvement
                 if avg_loss < best_loss - min_delta:
                     best_loss = avg_loss
@@ -400,7 +427,7 @@ if __name__ == "__main__":
                     break
                 fallback_count = 0
                 # Convert user input to token indices
-                toks = [vocab[w] for w in u.split() if w in vocab]
+                toks = [vocab.get(w) or vocab.get(w.lower()) for w in u.split() if vocab.get(w) or vocab.get(w.lower())]
                 if not toks:
                     print("no known tokens")
                     continue
