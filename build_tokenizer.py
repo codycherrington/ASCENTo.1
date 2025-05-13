@@ -7,58 +7,87 @@ import re
 OUTPUT_DIR = "ascent_data"
 EOS_TOKEN = "<eos>"
 
+# Load primary conversations only for saving
+primary_conversations = []
 try:
     with open(os.path.join(OUTPUT_DIR, "conversations.json"), "r") as f:
-        conversations = json.load(f)
+        primary_conversations = json.load(f)
 except FileNotFoundError:
-    print("❌ conversations.json not found. This file is required.")
+    print("⚠️ conversations.json not found. Skipping.")
+
+# Load all for tokenizer input
+conversations = list(primary_conversations)
+
+try:
+    with open(os.path.join(OUTPUT_DIR, "curated_conversations.json"), "r") as f:
+        conversations.extend(json.load(f))
+except FileNotFoundError:
+    print("⚠️ curated_conversations.json not found. Skipping.")
+
+try:
+    with open(os.path.join(OUTPUT_DIR, "identity.json"), "r") as f:
+        conversations.extend(json.load(f))
+except FileNotFoundError:
+    print("⚠️ identity.json not found. Skipping.")
+
+if not conversations:
+    print("❌ No valid conversation files found.")
     sys.exit(1)
 
-# Try to load and combine reddit_conversations.json if present
-try:
-    with open(os.path.join(OUTPUT_DIR, "reddit_conversations.json"), "r") as f:
-        reddit_convos = json.load(f)
-        conversations.extend(reddit_convos)
-except FileNotFoundError:
-    print("⚠️ reddit_conversations.json not found. Continuing without it.")
+def normalize(text):
+    # Remove EOS_TOKEN, normalize whitespace, lowercase
+    return re.sub(r'\s+', ' ', text.replace(EOS_TOKEN, "")).strip().lower()
 
-formatted_convos = []
+def signature(convo):
+    return (normalize(convo.get("input", "")), normalize(convo.get("output", "")))
+
+duplicate_signatures = set()
+
+for filename in ["curated_conversations.json", "identity.json"]:
+    try:
+        with open(os.path.join(OUTPUT_DIR, filename), "r") as f:
+            for entry in json.load(f):
+                duplicate_signatures.add(signature(entry))
+    except FileNotFoundError:
+        continue
+
+# Filter primary conversations before formatting
+filtered_raw_primary = [
+    c for c in primary_conversations
+    if signature(c) not in duplicate_signatures
+]
+
 token_set = set()
 
-for i, convo in enumerate(conversations):
+def is_junk(text):
+    text = text.strip().lower()
+    return (
+        text in ["", "[removed]"]
+        or "[deleted]" in text
+        or len(text) < 5
+        or all(char in "!?.<>" for char in text)
+    )
+
+# Now re-format only the filtered primary conversations
+formatted_convos = []
+for i, convo in enumerate(filtered_raw_primary):
     input_text = convo.get("input", "<empty>").strip()
     output_text = convo.get("output", "<empty>").strip()
 
     input_text = re.sub(r'\s+([.,!?;:])', r'\1', input_text)
     output_text = re.sub(r'\s+([.,!?;:])', r'\1', output_text)
 
-    # Normalize and skip if clearly junk
-    if (
-        "[deleted]" in input_text.lower()
-        or input_text.lower() == "[removed]"
-        or len(input_text) < 5
-        or all(char in "!?.<>" for char in input_text)
-        or input_text == ""
-    ):
-        print(f"⚠️ Skipping removed or junk input at index {i}")
-        continue
-    if (
-        output_text.lower().startswith("[removed]")
-        or "[deleted]" in output_text.lower()
-        or len(output_text) < 5
-        or all(char in "!?.<>" for char in output_text)
-        or output_text == ""
-    ):
-        print(f"⚠️ Skipping removed or junk output at index {i}")
+    if is_junk(input_text) or is_junk(output_text):
+        print(f"⚠️ Skipping removed or junk line from original conversations.")
         continue
 
     output_text = output_text.replace(f"{EOS_TOKEN}", "").strip() + f" {EOS_TOKEN}"
-    formatted_convos.append({"input": input_text, "output": output_text})
+    convo_data = {"input": input_text, "output": output_text}
+    if "tone" in convo:
+        convo_data["tone"] = convo["tone"]
+    formatted_convos.append(convo_data)
     token_set.update(input_text.split())
     token_set.update(output_text.split())
-
-with open(os.path.join(OUTPUT_DIR, "conversations.json"), "w") as f:
-    json.dump(formatted_convos, f, indent=2)
 
 # Ensure output directory exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -101,5 +130,10 @@ if UNK_TOKEN in vocab:
 with open(os.path.join(OUTPUT_DIR, "special_tokens.json"), "w") as f:
     json.dump(special_tokens, f, indent=2)
 
+# Overwrite conversations.json with cleaned, non-duplicate entries
+with open(os.path.join(OUTPUT_DIR, "conversations.json"), "w") as f:
+    json.dump(formatted_convos, f, indent=2)
+
 print(f"✅ Export complete. Vocab size: {len(vocab)} tokens.")
-print(f"📝 Saved files to '{OUTPUT_DIR}': conversations.json, vocab.json, id_to_word.json, special_tokens.json")
+print(f"📝 Tokenizer processed input from: conversations.json, curated_conversations.json, identity.json")
+print(f"📦 Saved to '{OUTPUT_DIR}': conversations.json (cleaned), vocab.json, id_to_word.json, special_tokens.json")

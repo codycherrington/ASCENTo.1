@@ -3,7 +3,14 @@ import json
 import math
 import os
 import random
+import re
 import time
+from datetime import timedelta
+
+
+# Consistent tokenization function
+def tokenize(text):
+    return re.sub(r'\s+', ' ', text.replace("<eos>", "")).strip().split()
 
 import matplotlib.pyplot as plt
 import torch
@@ -15,17 +22,17 @@ from torch.optim.lr_scheduler import LambdaLR
 # Main Configuration Section
 # ----------------------------
 # Set model and training hyperparameters
-embedding_dim = 320          # Size of each token's embedding vector
-hidden_dim = 640             # Hidden size for the feed-forward layers
+embedding_dim = 384          # Size of each token's embedding vector
+hidden_dim = 768             # Hidden size for the feed-forward layers
 num_transformer_blocks = 6   # Number of transformer layers
-batch_size = 32              # Batch size for training
+batch_size = 16              # Batch size for training
 learning_rate = 0.0012       # Initial learning rate
-temperature = 0.6            # Sampling temperature for generation
+temperature = 0.7            # Sampling temperature for generation
 max_generation_tokens = 50   # Maximum number of tokens generated in chat
-early_stopping_patience = 20    # Early stopping patience
-early_stopping_min_delta = 0.0003 # Minimum improvement for early stopping
+early_stopping_patience = 30    # Early stopping patience
+early_stopping_min_delta = 0.0002 # Minimum improvement for early stopping
 top_p_sampling_threshold = 0.95     # Top-p (nucleus) sampling threshold
-total_epochs = 200            # Total number of training epochs
+total_epochs = 350            # Total number of training epochs
 top_k_sampling_limit = 30     # Maximum number of top-k tokens to sample from
 
 
@@ -37,6 +44,14 @@ import json
 with open("ascent_data/conversations.json", "r") as f:
     conversations = json.load(f)
 
+# Load curated conversations and boost their weight
+with open("ascent_data/curated_conversations.json", "r") as f:
+    curated_convos = json.load(f)
+
+# Weight curated examples more heavily to anchor tone
+curated_weight = 5
+conversations.extend(curated_convos * curated_weight)
+
 with open("ascent_data/vocab.json", "r") as f:
     vocab = json.load(f)
 
@@ -45,6 +60,13 @@ with open("ascent_data/id_to_word.json", "r") as f:
 
 with open("ascent_data/special_tokens.json", "r") as f:
     special_tokens = json.load(f)
+
+# Load identity-defining conversations and weight heavily
+with open("ascent_data/identity.json", "r") as f:
+    identity_convos = json.load(f)
+
+identity_weight = 10
+conversations.extend(identity_convos * identity_weight)
 
 vocab_size = len(vocab)
 
@@ -85,7 +107,7 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x):
         # Adds positional encodings to the input embeddings
-        return x + 0.95 * self.pe[:, :x.size(1)]
+        return x + 0.95 * self.pe[:, :x.size(1)]  # Optional dropout could be inserted here
 
 
 # MultiHeadSelfAttention: Allows the model to attend to different parts of the sequence
@@ -222,13 +244,13 @@ if __name__ == "__main__":
             for p in conversations:
                 if "input" in p and "output" in p:
                     inp_tokens = []
-                    for w in p["input"].split():
+                    for w in tokenize(p["input"]):
                         token_id = vocab.get(w)
                         if token_id is not None and token_id < vocab_size:
                             inp_tokens.append(token_id)
 
                     out_tokens = []
-                    for w in p["output"].split():
+                    for w in tokenize(p["output"]):
                         token_id = vocab.get(w)
                         if token_id is not None and token_id < vocab_size:
                             out_tokens.append(token_id)
@@ -252,6 +274,7 @@ if __name__ == "__main__":
             timestamp = now.strftime("%Y-%m-%d_%H-%M")
             run_name = f"run_{run_counter:03d}_{timestamp}_warmup"
             start_time = time.time()
+            total_training_start_time = time.time()
             run_dir = os.path.join(log_dir, run_name)
             os.makedirs(run_dir, exist_ok=True)
             live_loss_path = os.path.join(run_dir, "live_loss.txt")
@@ -291,7 +314,13 @@ if __name__ == "__main__":
                 epoch_start = time.perf_counter()
                 random.shuffle(data)
 
+                # Show total token count for this epoch
+                epoch_token_count = sum(len(out) for _, out in data)
+                print(f"🧮 Tokens this epoch: {epoch_token_count}")
+
                 epoch_losses = []
+                total_batches = len(data) // batch_size + 1
+                batch_start_time = time.time()
                 for i in range(0, len(data), batch_size):
                     batch = data[i:i+batch_size]
                     inputs = [inp for inp, _ in batch]
@@ -311,6 +340,19 @@ if __name__ == "__main__":
                     optim.step()
                     epoch_losses.append(loss.item())
 
+                    # Batch-level progress bar with ETA
+                    batch_elapsed = time.time() - batch_start_time
+                    percent_done = min((i + batch_size) / len(data), 1.0)
+                    total_elapsed = time.time() - start_time
+                    estimated_total = total_elapsed / percent_done if percent_done > 0 else 0
+                    remaining_time = estimated_total - total_elapsed
+                    eta = timedelta(seconds=int(remaining_time))
+                    # Loading bar
+                    bar_length = 24
+                    filled_length = int(bar_length * percent_done)
+                    bar = "█" * filled_length + "-" * (bar_length - filled_length)
+                    print(f"\r[{bar}] Progress: {int(percent_done * 100)}% | ETA: {eta} | Batch Loss: {loss.item():.4f}", end="", flush=True)
+
                 avg_loss = sum(epoch_losses) / len(epoch_losses)
                 losses.append(avg_loss)
                 perplexity = math.exp(avg_loss)
@@ -321,11 +363,23 @@ if __name__ == "__main__":
                     f_loss.write(f"{avg_loss}\n")
                     f_ppl.write(f"{perplexity}\n")
 
-                # Print dynamic single-line progress summary
+                # Print dynamic single-line progress summary (keep for batch progress)
                 print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Patience: {patience_counter}/{patience}", end="", flush=True)
 
                 epoch_duration = time.perf_counter() - epoch_start
-                print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Duration: {epoch_duration:.2f}s{' ' * 20}")
+
+                # Print loss/perplexity and total training ETA every 10 epochs or last epoch
+                if (epoch + 1) % 10 == 0 or epoch == total_epochs - 1:
+                    print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Duration: {epoch_duration:.2f}s")
+                    # Estimate total training duration
+                    total_elapsed_time = time.time() - total_training_start_time
+                    percent_complete = (epoch + 1) / total_epochs
+                    estimated_total_time = total_elapsed_time / percent_complete
+                    eta_total = timedelta(seconds=int(estimated_total_time - total_elapsed_time))
+                    print(f"🕒 Elapsed: {timedelta(seconds=int(total_elapsed_time))} | ETA to complete: {eta_total}")
+                else:
+                    # Overwrite line to keep display clean
+                    print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Duration: {epoch_duration:.2f}s{' ' * 20}", end="", flush=True)
 
                 scheduler.step()
 

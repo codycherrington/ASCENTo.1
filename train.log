@@ -1,0 +1,13 @@
+Vocab size / Output size: 15651
+Checkpoint incompatible with current model (likely vocab or architecture change).
+Starting with a fresh untrained model.
+
+
+Welcome to Ascent!
+Options:
+  [1] Train the model
+  [2] Chat with Ascent
+  [3] Save model
+  [4] Exit
+  [5] Learning Rate Finder (optional)
+Enter your choice (1/2/3/4/5): 
