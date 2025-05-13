@@ -1,6 +1,7 @@
 import os
 import json
 import sys
+import re
 
 
 OUTPUT_DIR = "ascent_data"
@@ -28,9 +29,13 @@ for i, convo in enumerate(conversations):
     input_text = convo.get("input", "<empty>").strip()
     output_text = convo.get("output", "<empty>").strip()
 
+    input_text = re.sub(r'\s+([.,!?;:])', r'\1', input_text)
+    output_text = re.sub(r'\s+([.,!?;:])', r'\1', output_text)
+
     # Normalize and skip if clearly junk
     if (
-        input_text.lower() == "[removed]"
+        "[deleted]" in input_text.lower()
+        or input_text.lower() == "[removed]"
         or len(input_text) < 5
         or all(char in "!?.<>" for char in input_text)
         or input_text == ""
@@ -39,6 +44,7 @@ for i, convo in enumerate(conversations):
         continue
     if (
         output_text.lower().startswith("[removed]")
+        or "[deleted]" in output_text.lower()
         or len(output_text) < 5
         or all(char in "!?.<>" for char in output_text)
         or output_text == ""
@@ -46,7 +52,7 @@ for i, convo in enumerate(conversations):
         print(f"⚠️ Skipping removed or junk output at index {i}")
         continue
 
-    output_text += f" {EOS_TOKEN}"
+    output_text = output_text.replace(f"{EOS_TOKEN}", "").strip() + f" {EOS_TOKEN}"
     formatted_convos.append({"input": input_text, "output": output_text})
     token_set.update(input_text.split())
     token_set.update(output_text.split())

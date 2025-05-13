@@ -1,15 +1,15 @@
-import os
-import math
-import time
-import json
 import datetime
+import json
+import math
+import os
 import random
+import time
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import matplotlib.pyplot as plt
-from torch.optim.lr_scheduler import LambdaLR
 from torch.nn.utils.rnn import pad_sequence
+from torch.optim.lr_scheduler import LambdaLR
 
 # ----------------------------
 # Main Configuration Section
@@ -18,8 +18,8 @@ from torch.nn.utils.rnn import pad_sequence
 embedding_dim = 320          # Size of each token's embedding vector
 hidden_dim = 640             # Hidden size for the feed-forward layers
 num_transformer_blocks = 6   # Number of transformer layers
-batch_size = 16              # Batch size for training
-learning_rate = 0.0008       # Initial learning rate
+batch_size = 32              # Batch size for training
+learning_rate = 0.0012       # Initial learning rate
 temperature = 0.6            # Sampling temperature for generation
 max_generation_tokens = 50   # Maximum number of tokens generated in chat
 early_stopping_patience = 20    # Early stopping patience
