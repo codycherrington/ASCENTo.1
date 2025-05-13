@@ -23,9 +23,9 @@ from torch.optim.lr_scheduler import LambdaLR
 # ----------------------------
 # Set model and training hyperparameters
 embedding_dim = 384          # Size of each token's embedding vector
-hidden_dim = 768             # Hidden size for the feed-forward layers
-num_transformer_blocks = 6   # Number of transformer layers
-batch_size = 16              # Batch size for training
+hidden_dim = 512             # Hidden size for the feed-forward layers
+num_transformer_blocks = 4   # Number of transformer layers
+batch_size = 8              # Batch size for training
 learning_rate = 0.0012       # Initial learning rate
 temperature = 0.7            # Sampling temperature for generation
 max_generation_tokens = 50   # Maximum number of tokens generated in chat
@@ -285,9 +285,9 @@ if __name__ == "__main__":
                 f.write("")
 
             # Define the loss function and optimizer
-            loss_fn = nn.CrossEntropyLoss(label_smoothing=0.05)
+            loss_fn = nn.CrossEntropyLoss(label_smoothing=0.02)
             optim = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-            def warmup_cosine_lr(step, warmup_steps=200):
+            def warmup_cosine_lr(step, warmup_steps=100):
                 if step < warmup_steps:
                     return step / warmup_steps
                 return 0.5 * (1 + math.cos((step - warmup_steps) / (500 - warmup_steps) * math.pi))

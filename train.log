@@ -10,4 +10,6 @@ Options:
   [3] Save model
   [4] Exit
   [5] Learning Rate Finder (optional)
-Enter your choice (1/2/3/4/5): 
+Enter your choice (1/2/3/4/5): Traceback (most recent call last):
+  File "/Users/codycherrington/Documents/Projects/Ascent/model.py", line 214, in <module>
+OSError: [Errno 5] Input/output error
