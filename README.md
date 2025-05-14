@@ -7,10 +7,11 @@
 
 - **Custom Language Model** – Trained from scratch with PyTorch using your own dataset.
 - **Transformer Architecture** – Simple, interpretable, and modifiable.
-- **Terminal Chat Interface** – Interact with the model directly through your console.
+- 🖥️ **Streamlit Interface** – Control training, chatting, and data prep from your browser.
 - **Live Training Dashboard** – See loss, perplexity, and progress updates in real time.
 - **Session Logging** – Automatically saves loss/perplexity curves and run metadata.
 - **Flexible Control Center** – Adjust model dimensions, learning rates, batch sizes, and more.
+- 🔁 **Interrupt-Safe Checkpoints** – Stop and resume training without loss.
 
 ---
 
@@ -50,13 +51,13 @@ cd ASCENTo.1
 pip install torch matplotlib
 ```
 
-### 3. Launch the model
+### 3. Launch the interface
 
 ```bash
-python model.py
+streamlit run interface.py
 ```
 
-Train from scratch, start a conversation, or expand the dataset.
+Train from scratch, chat with your model, or expand the dataset—all from your browser.
 
 ---
 
@@ -64,14 +65,28 @@ Train from scratch, start a conversation, or expand the dataset.
 
 ```
 ASCENTo.1/
-├── ascent_data/               # Preprocessed conversations + vocab
-├── Archive/                   # Old scripts (vocab builder, etc.)
-├── model.py                   # Core model: train, chat, save, etc.
-├── dashboard.py               # (Optional) Graphical loss + performance tracking
-├── training_logs/             # Logs per training run
-├── ascent_tuning_test.txt     # Dev/test samples for quick tuning
-├── LICENSE                    # License text
-└── README.md                  # This file
+├── ascent_data/                   # Curated + identity + base conversations, vocab files
+│   ├── conversations.json
+│   ├── curated_conversations.json
+│   ├── identity.json
+│   ├── vocab.json
+│   ├── id_to_word.json
+│   └── special_tokens.json
+├── Archive/                       # Deprecated: reddit scraper and old files
+│   ├── reddit_scraper.py
+│   └── reddit_conversations.json
+├── gutenberg_scraper.py          # Automatically collects and tags conversational data from public domain books
+├── build_tokenizer.py            # Tokenizes and saves training input
+├── model.py                      # Core file: train, chat, save, etc.
+├── interface.py                  # Streamlit GUI for training, chatting, retokenizing, and viewing logs
+├── training_logs/                # Stores loss/perplexity logs and best model per run
+│   ├── run_XXX_<timestamp>/
+│   │   ├── live_loss.txt
+│   │   ├── live_perplexity.txt
+│   │   └── Ascent_best_model.pth
+├── train.log                     # Consolidated training print log
+├── LICENSE                       # MIT License
+└── README.md                     # This file
 ```
 
 ---

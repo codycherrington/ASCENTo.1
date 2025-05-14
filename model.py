@@ -1,3 +1,5 @@
+import sys
+auto_mode = sys.argv[1] if len(sys.argv) > 1 else None
 import datetime
 import json
 import math
@@ -233,7 +235,11 @@ if __name__ == "__main__":
         print("  [3] Save model")
         print("  [4] Exit")
         print("  [5] Learning Rate Finder (optional)")
-        choice = input("Enter your choice (1/2/3/4/5): ").strip()
+        if auto_mode:
+            choice = auto_mode
+            auto_mode = None  # Clear it after first use
+        else:
+            choice = input("Enter your choice (1/2/3/4/5): ").strip()
 
         # ---------------------------------
         # Option 1: Training loop
@@ -309,161 +315,207 @@ if __name__ == "__main__":
             best_epoch = -1
             import random
 
+            # Resume training support
+            resume_state_path = os.path.join(log_dir, "training_state.json")
+            resume_training = os.path.exists(resume_state_path)
+            start_epoch = 0
+            if resume_training:
+                with open(resume_state_path, "r") as f:
+                    resume_data = json.load(f)
+                    best_loss = resume_data["best_loss"]
+                    best_epoch = resume_data["best_epoch"]
+                    patience_counter = resume_data["patience_counter"]
+                    start_epoch = resume_data["last_epoch"] + 1
+                    print(f"🔄 Resuming training from epoch {start_epoch}")
+            else:
+                best_loss = float('inf')
+                best_epoch = -1
+                patience_counter = 0
+
             # Main training loop over epochs
-            for epoch, _ in enumerate(range(total_epochs)):
-                epoch_start = time.perf_counter()
-                random.shuffle(data)
+            try:
+                for epoch in range(start_epoch, total_epochs):
+                    epoch_start = time.perf_counter()
+                    random.shuffle(data)
 
-                # Show total token count for this epoch
-                epoch_token_count = sum(len(out) for _, out in data)
-                print(f"🧮 Tokens this epoch: {epoch_token_count}")
+                    # Show total token count for this epoch
+                    epoch_token_count = sum(len(out) for _, out in data)
+                    print(f"🧮 Tokens this epoch: {epoch_token_count}")
 
-                epoch_losses = []
-                total_batches = len(data) // batch_size + 1
-                batch_start_time = time.time()
-                for i in range(0, len(data), batch_size):
-                    batch = data[i:i+batch_size]
-                    inputs = [inp for inp, _ in batch]
-                    targets = [out for _, out in batch]
-                    inp_batch = pad_batch(inputs)
-                    out_batch = pad_batch(targets)
-                    optim.zero_grad()
-                    logits = model(inp_batch)
-                    seq_len = min(logits.size(1), out_batch.size(1))
-                    logits = logits[:, :seq_len, :]
-                    target = out_batch[:, :seq_len]
-                    logits_flat = logits.reshape(-1, vocab_size)
-                    target_flat = target.reshape(-1)
-                    loss = loss_fn(logits_flat, target_flat)
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                    optim.step()
-                    epoch_losses.append(loss.item())
+                    epoch_losses = []
+                    total_batches = len(data) // batch_size + 1
+                    batch_start_time = time.time()
+                    for i in range(0, len(data), batch_size):
+                        batch = data[i:i+batch_size]
+                        inputs = [inp for inp, _ in batch]
+                        targets = [out for _, out in batch]
+                        inp_batch = pad_batch(inputs)
+                        out_batch = pad_batch(targets)
+                        optim.zero_grad()
+                        logits = model(inp_batch)
+                        seq_len = min(logits.size(1), out_batch.size(1))
+                        logits = logits[:, :seq_len, :]
+                        target = out_batch[:, :seq_len]
+                        logits_flat = logits.reshape(-1, vocab_size)
+                        target_flat = target.reshape(-1)
+                        loss = loss_fn(logits_flat, target_flat)
+                        loss.backward()
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                        optim.step()
+                        epoch_losses.append(loss.item())
 
-                    # Batch-level progress bar with ETA
-                    batch_elapsed = time.time() - batch_start_time
-                    percent_done = min((i + batch_size) / len(data), 1.0)
-                    total_elapsed = time.time() - start_time
-                    estimated_total = total_elapsed / percent_done if percent_done > 0 else 0
-                    remaining_time = estimated_total - total_elapsed
-                    eta = timedelta(seconds=int(remaining_time))
-                    # Loading bar
-                    bar_length = 24
-                    filled_length = int(bar_length * percent_done)
-                    bar = "█" * filled_length + "-" * (bar_length - filled_length)
-                    print(f"\r[{bar}] Progress: {int(percent_done * 100)}% | ETA: {eta} | Batch Loss: {loss.item():.4f}", end="", flush=True)
+                        # Batch-level progress bar with ETA
+                        batch_elapsed = time.time() - batch_start_time
+                        percent_done = min((i + batch_size) / len(data), 1.0)
+                        total_elapsed = time.time() - start_time
+                        estimated_total = total_elapsed / percent_done if percent_done > 0 else 0
+                        remaining_time = estimated_total - total_elapsed
+                        eta = timedelta(seconds=int(remaining_time))
+                        # Loading bar
+                        bar_length = 24
+                        filled_length = int(bar_length * percent_done)
+                        bar = "█" * filled_length + "-" * (bar_length - filled_length)
+                        print(f"\r[{bar}] Progress: {int(percent_done * 100)}% | ETA: {eta} | Batch Loss: {loss.item():.4f}", end="", flush=True)
 
-                avg_loss = sum(epoch_losses) / len(epoch_losses)
-                losses.append(avg_loss)
-                perplexity = math.exp(avg_loss)
-                perplexities.append(perplexity)
+                    avg_loss = sum(epoch_losses) / len(epoch_losses)
+                    losses.append(avg_loss)
+                    perplexity = math.exp(avg_loss)
+                    perplexities.append(perplexity)
 
-                # Write loss and perplexity to live log files
-                with open(live_loss_path, "a") as f_loss, open(live_perplexity_path, "a") as f_ppl:
-                    f_loss.write(f"{avg_loss}\n")
-                    f_ppl.write(f"{perplexity}\n")
+                    # Write loss and perplexity to live log files
+                    with open(live_loss_path, "a") as f_loss, open(live_perplexity_path, "a") as f_ppl:
+                        f_loss.write(f"{avg_loss}\n")
+                        f_ppl.write(f"{perplexity}\n")
 
-                # Print dynamic single-line progress summary (keep for batch progress)
-                print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Patience: {patience_counter}/{patience}", end="", flush=True)
+                    # Print dynamic single-line progress summary (keep for batch progress)
+                    print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Patience: {patience_counter}/{patience}", end="", flush=True)
 
-                epoch_duration = time.perf_counter() - epoch_start
+                    epoch_duration = time.perf_counter() - epoch_start
 
-                # Print loss/perplexity and total training ETA every 10 epochs or last epoch
-                if (epoch + 1) % 10 == 0 or epoch == total_epochs - 1:
-                    print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Duration: {epoch_duration:.2f}s")
-                    # Estimate total training duration
-                    total_elapsed_time = time.time() - total_training_start_time
-                    percent_complete = (epoch + 1) / total_epochs
-                    estimated_total_time = total_elapsed_time / percent_complete
-                    eta_total = timedelta(seconds=int(estimated_total_time - total_elapsed_time))
-                    print(f"🕒 Elapsed: {timedelta(seconds=int(total_elapsed_time))} | ETA to complete: {eta_total}")
-                else:
-                    # Overwrite line to keep display clean
-                    print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Duration: {epoch_duration:.2f}s{' ' * 20}", end="", flush=True)
+                    # Print loss/perplexity and total training ETA every 10 epochs or last epoch
+                    if (epoch + 1) % 10 == 0 or epoch == total_epochs - 1:
+                        print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Duration: {epoch_duration:.2f}s")
+                        # Estimate total training duration
+                        total_elapsed_time = time.time() - total_training_start_time
+                        percent_complete = (epoch + 1) / total_epochs
+                        estimated_total_time = total_elapsed_time / percent_complete
+                        eta_total = timedelta(seconds=int(estimated_total_time - total_elapsed_time))
+                        print(f"🕒 Elapsed: {timedelta(seconds=int(total_elapsed_time))} | ETA to complete: {eta_total}")
+                    else:
+                        # Overwrite line to keep display clean
+                        print(f"\rEpoch {epoch + 1}/{total_epochs} | Loss: {avg_loss:.4f} | Perplexity: {perplexity:.2f} | Duration: {epoch_duration:.2f}s{' ' * 20}", end="", flush=True)
 
-                scheduler.step()
+                    scheduler.step()
 
-                # Early stopping: save best model and break if no improvement
-                if avg_loss < best_loss - min_delta:
-                    best_loss = avg_loss
-                    patience_counter = 0
-                    best_model_state = model.state_dict()
-                    best_epoch = epoch
+                    # Save training state
+                    training_state = {
+                        "last_epoch": epoch,
+                        "best_loss": best_loss,
+                        "best_epoch": best_epoch,
+                        "patience_counter": patience_counter
+                    }
+                    with open(resume_state_path, "w") as f:
+                        json.dump(training_state, f)
+
+                    # Early stopping: save best model and break if no improvement
+                    if avg_loss < best_loss - min_delta:
+                        best_loss = avg_loss
+                        patience_counter = 0
+                        best_model_state = model.state_dict()
+                        best_epoch = epoch
+                        torch.save(best_model_state, "Ascent_model.pth")
+                        torch.save(best_model_state, os.path.join(run_dir, "Ascent_best_model.pth"))
+                    else:
+                        patience_counter += 1
+                    if patience_counter >= patience:
+                        print(f"Early stopping triggered at epoch {epoch}. Best avg_loss={best_loss:.4f}")
+                        break
+
+                print()
+                print(f"\nFinal training avg_loss: {avg_loss:.4f}, perplexity: {perplexity:.2f}")
+                duration_minutes = (time.time() - start_time) / 60
+                print(f"Training Duration: {duration_minutes:.2f} minutes")
+                print("Training complete. Returning to main menu.\n")
+                print("🌱 Ascent: Growth is patient. You have built something real. See you among the stars.\n")
+
+                # Restore best model if early stopped
+                if best_model_state is not None:
+                    model.load_state_dict(best_model_state)
+                    print(f"Restored best model from epoch {best_epoch + 1} with avg_loss={best_loss:.4f}.")
+
+                # Save raw loss and perplexity values
+                loss_data_path = os.path.join(run_dir, "loss_curve.txt")
+                perplexity_data_path = os.path.join(run_dir, "perplexity_curve.txt")
+                with open(loss_data_path, "w") as f:
+                    f.write("\n".join(map(str, losses)))
+                with open(perplexity_data_path, "w") as f:
+                    f.write("\n".join(map(str, perplexities)))
+
+                # Save training loss and perplexity plots using data from file
+                loss_curve_path = os.path.join(run_dir, "loss_curve.png")
+                loss_data_path = os.path.join(run_dir, "loss_curve.txt")
+                if os.path.exists(loss_data_path):
+                    with open(loss_data_path, "r") as f:
+                        losses = [float(line.strip()) for line in f if line.strip()]
+                plt.figure()
+                plt.plot(losses, label="Avg Loss")
+                plt.title(f"Training Loss Curve - {run_name}")
+                plt.xlabel("Epochs")
+                plt.ylabel("Loss")
+                plt.legend()
+                plt.savefig(loss_curve_path)
+
+                perplexity_curve_path = os.path.join(run_dir, "perplexity_curve.png")
+                perplexity_data_path = os.path.join(run_dir, "perplexity_curve.txt")
+                if os.path.exists(perplexity_data_path):
+                    with open(perplexity_data_path, "r") as f:
+                        perplexities = [float(line.strip()) for line in f if line.strip()]
+                plt.figure()
+                plt.plot(perplexities, label="Perplexity", color='orange')
+                plt.title(f"Training Perplexity Curve - {run_name}")
+                plt.xlabel("Epochs")
+                plt.ylabel("Perplexity")
+                plt.legend()
+                plt.savefig(perplexity_curve_path)
+
+                print(f"Saved loss and perplexity data to '{loss_data_path}' and '{perplexity_data_path}'")
+                print(f"Saved training curves: '{loss_curve_path}' and '{perplexity_curve_path}'")
+                # Save metadata about the training run
+                metadata_path = os.path.join(run_dir, "metadata.txt")
+                with open(metadata_path, "w") as f:
+                    f.write(f"Run: {run_counter}\n")
+                    f.write(f"Timestamp: {timestamp}\n")
+                    f.write(f"Embedding Dim: {embedding_dim}\n")
+                    f.write(f"Hidden Dim: {hidden_dim}\n")
+                    f.write(f"Num Transformer Blocks: {num_transformer_blocks}\n")
+                    f.write(f"Batch Size: {batch_size}\n")
+                    f.write(f"Learning Rate: {learning_rate}\n")
+                    f.write(f"Temperature: {temperature}\n")
+                    f.write(f"Max Generation Tokens: {max_generation_tokens}\n")
+                    f.write(f"Best Avg Loss: {best_loss:.4f}\n")
+                    f.write(f"Final Perplexity: {perplexity:.2f}\n")
+                    f.write(f"Training Duration (min): {duration_minutes:.2f}\n")
+                    f.write(f"Final Epoch: {epoch + 1}\n")
+                print(f"Saved metadata to '{metadata_path}'")
+                print(f"All logs saved in '{run_dir}'")
+            except KeyboardInterrupt:
+                print("\n🛑 Training interrupted by user. Saving current best model...")
+                # Save training state on interrupt
+                training_state = {
+                    "last_epoch": epoch,
+                    "best_loss": best_loss,
+                    "best_epoch": best_epoch,
+                    "patience_counter": patience_counter
+                }
+                with open(resume_state_path, "w") as f:
+                    json.dump(training_state, f)
+                print("💾 Training state saved for resume.")
+                if best_model_state is not None:
                     torch.save(best_model_state, "Ascent_model.pth")
-                    torch.save(best_model_state, os.path.join(run_dir, "Ascent_best_model.pth"))
+                    print("✅ Model saved as 'Ascent_model.pth'. Exiting safely.")
                 else:
-                    patience_counter += 1
-                if patience_counter >= patience:
-                    print(f"Early stopping triggered at epoch {epoch}. Best avg_loss={best_loss:.4f}")
-                    break
-
-            print()
-            print(f"\nFinal training avg_loss: {avg_loss:.4f}, perplexity: {perplexity:.2f}")
-            duration_minutes = (time.time() - start_time) / 60
-            print(f"Training Duration: {duration_minutes:.2f} minutes")
-            print("Training complete. Returning to main menu.\n")
-            print("🌱 Ascent: Growth is patient. You have built something real. See you among the stars.\n")
-
-            # Restore best model if early stopped
-            if best_model_state is not None:
-                model.load_state_dict(best_model_state)
-                print(f"Restored best model from epoch {best_epoch + 1} with avg_loss={best_loss:.4f}.")
-
-            # Save raw loss and perplexity values
-            loss_data_path = os.path.join(run_dir, "loss_curve.txt")
-            perplexity_data_path = os.path.join(run_dir, "perplexity_curve.txt")
-            with open(loss_data_path, "w") as f:
-                f.write("\n".join(map(str, losses)))
-            with open(perplexity_data_path, "w") as f:
-                f.write("\n".join(map(str, perplexities)))
-
-            # Save training loss and perplexity plots using data from file
-            loss_curve_path = os.path.join(run_dir, "loss_curve.png")
-            loss_data_path = os.path.join(run_dir, "loss_curve.txt")
-            if os.path.exists(loss_data_path):
-                with open(loss_data_path, "r") as f:
-                    losses = [float(line.strip()) for line in f if line.strip()]
-            plt.figure()
-            plt.plot(losses, label="Avg Loss")
-            plt.title(f"Training Loss Curve - {run_name}")
-            plt.xlabel("Epochs")
-            plt.ylabel("Loss")
-            plt.legend()
-            plt.savefig(loss_curve_path)
-
-            perplexity_curve_path = os.path.join(run_dir, "perplexity_curve.png")
-            perplexity_data_path = os.path.join(run_dir, "perplexity_curve.txt")
-            if os.path.exists(perplexity_data_path):
-                with open(perplexity_data_path, "r") as f:
-                    perplexities = [float(line.strip()) for line in f if line.strip()]
-            plt.figure()
-            plt.plot(perplexities, label="Perplexity", color='orange')
-            plt.title(f"Training Perplexity Curve - {run_name}")
-            plt.xlabel("Epochs")
-            plt.ylabel("Perplexity")
-            plt.legend()
-            plt.savefig(perplexity_curve_path)
-
-            print(f"Saved loss and perplexity data to '{loss_data_path}' and '{perplexity_data_path}'")
-            print(f"Saved training curves: '{loss_curve_path}' and '{perplexity_curve_path}'")
-            # Save metadata about the training run
-            metadata_path = os.path.join(run_dir, "metadata.txt")
-            with open(metadata_path, "w") as f:
-                f.write(f"Run: {run_counter}\n")
-                f.write(f"Timestamp: {timestamp}\n")
-                f.write(f"Embedding Dim: {embedding_dim}\n")
-                f.write(f"Hidden Dim: {hidden_dim}\n")
-                f.write(f"Num Transformer Blocks: {num_transformer_blocks}\n")
-                f.write(f"Batch Size: {batch_size}\n")
-                f.write(f"Learning Rate: {learning_rate}\n")
-                f.write(f"Temperature: {temperature}\n")
-                f.write(f"Max Generation Tokens: {max_generation_tokens}\n")
-                f.write(f"Best Avg Loss: {best_loss:.4f}\n")
-                f.write(f"Final Perplexity: {perplexity:.2f}\n")
-                f.write(f"Training Duration (min): {duration_minutes:.2f}\n")
-                f.write(f"Final Epoch: {epoch + 1}\n")
-            print(f"Saved metadata to '{metadata_path}'")
-            print(f"All logs saved in '{run_dir}'")
+                    print("⚠️ No model checkpoint available. Nothing was saved.")
+                break  # Exit training safely
 
 
         # ---------------------------------
@@ -510,6 +562,10 @@ if __name__ == "__main__":
                         if generated_ids:
                             for token_id in set(generated_ids):
                                 last_logits[token_id] *= 0.8
+                        # Prevent <pad> token from being generated
+                        pad_token_id = vocab.get("<pad>")
+                        if pad_token_id is not None:
+                            last_logits[pad_token_id] = -float("inf")
                         probs = F.softmax(last_logits / temp_step, dim=-1)
                         # Suppress <eos> token for first min_gen_tokens
                         if step < min_gen_tokens:
